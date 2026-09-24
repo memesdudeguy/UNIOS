@@ -1,25 +1,48 @@
 # UNIOS
 
-UNIOS is an experimental x86 operating system built for bare-metal i386 and QEMU. It is intentionally conservative: it targets x86-32, keeps a minimal command shell, and rejects unsupported architectures until they are implemented safely.
+UNIOS is an experimental x86 operating system for QEMU and bare-metal i386-compatible hardware.
 
-## Goals
+## Build commands
 
-- Build a freestanding x86 kernel
-- Support a serial console and minimal shell in QEMU
-- Keep the toolchain profile-aware and safe
-- Register drivers only after matching device IDs or classes
-- Provide a path toward a Linux-like syscall layer without fake compatibility
-
-## Build
+Run these commands from the repository root:
 
 ```bash
-make clean && make
-make run
+make check        # verify required tools
+make              # build the bootable ISO
+make run          # build and boot UNIOS in QEMU
+make run-debug    # boot QEMU with extra diagnostics
+make clean        # remove generated files
 ```
 
-## Notes
+Inside the UNIOS serial console, type:
 
-- Native architecture: x86 (i386 / i486)
-- Default target: i386-unknown-none-elf
-- Default CPU profile: i486
-- Unsupported architectures are rejected explicitly
+```text
+help
+?
+about
+ls
+pwd
+clear
+```
+
+Friendly aliases include:
+
+| Command | Alias |
+|---|---|
+| `help` | `?` |
+| `clear` | `cls` |
+| `ls` | `dir` |
+| `rm` | `del` |
+| `pwd` | `nav` |
+| `exit` | `quit` |
+
+Commands requiring arguments show examples instead of silently failing. Unsupported kernel features report their status clearly rather than pretending to complete.
+
+## Current scope
+
+- Native target: `i386-unknown-none-elf`
+- Default CPU profile: `i486`
+- Serial shell: supported
+- ELF/process support: validation and metadata foundation only
+- Arch/pacman/AUR applications: not supported yet
+- Unsupported architectures: rejected explicitly
