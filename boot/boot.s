@@ -1,11 +1,18 @@
-global _start
+.section .text
+.code32
+
+.globl _start
+.extern kernel_main
 
 _start:
     cli
-    mov $stack_top, %esp
+    movl $stack_top, %esp
+    andl $-16, %esp
     call kernel_main
+
+1:
     hlt
-    jmp .
+    jmp 1b
 
 .section .bss
 .align 16
