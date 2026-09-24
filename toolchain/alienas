@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AS="${AS:-clang}"
+TARGET="${UNIOS_TARGET:-i386-unknown-none-elf}"
+
+exec "$AS" --target="$TARGET" -m32 "$@"

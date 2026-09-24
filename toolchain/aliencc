@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CLANG="${CLANG:-clang}"
+TARGET="${UNIOS_TARGET:-i386-unknown-none-elf}"
+CPU="${UNIOS_CPU:-i486}"
+PROFILE="${UNIOS_PROFILE:-kernel}"
+
+args=()
+has_target=0
+has_cpu=0
+
+for arg in "$@"; do
+    case "$arg" in
+        --target=*|-target)
+            has_target=1 ;;
+        -march=*|-mcpu=*)
+            has_cpu=1 ;;
+    esac
+    args+=("$arg")
+done
+
+if [ "$has_target" -eq 0 ]; then
+    args=(--target="$TARGET" "${args[@]}")
+fi
+
+if [ "$has_cpu" -eq 0 ]; then
+    case "$CPU" in
+        i386|i486|pentium)
+            args=(-march="$CPU" "${args[@]}")
+            ;;
+        *)
+            echo "aliencc: unsupported UNIOS_CPU=$CPU" >&2
+            exit 2
+            ;;
+    esac
+fi
+
+case "$PROFILE" in
+    kernel)
+        args=(
+            -ffreestanding
+            -fno-builtin
+            -fno-stack-protector
+            -fno-pic
+            -fno-plt
+            -mno-sse
+            -mno-mmx
+            -mno-80387
+            "${args[@]}"
+        )
+        ;;
+    user)
+        args=(
+            -ffreestanding
+            -fno-builtin
+            -fno-stack-protector
+            -fno-pic
+            "${args[@]}"
+        )
+        ;;
+    hosted)
+        ;;
+    *)
+        echo "aliencc: invalid UNIOS_PROFILE=$PROFILE" >&2
+        exit 2
+        ;;
+ esac
+
+exec "$CLANG" "${args[@]}"

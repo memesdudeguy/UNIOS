@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CLANGXX="${CLANGXX:-clang++}"
+TARGET="${UNIOS_TARGET:-i386-unknown-none-elf}"
+CPU="${UNIOS_CPU:-i486}"
+PROFILE="${UNIOS_PROFILE:-kernel}"
+
+args=(
+    "--target=$TARGET"
+    "-march=$CPU"
+)
+
+case "$PROFILE" in
+    kernel)
+        args+=(
+            -ffreestanding
+            -fno-builtin
+            -fno-stack-protector
+            -fno-pic
+            -fno-plt
+            -fno-exceptions
+            -fno-rtti
+            -mno-sse
+            -mno-mmx
+            -mno-80387
+        )
+        ;;
+    user)
+        args+=(
+            -ffreestanding
+            -fno-builtin
+            -fno-stack-protector
+            -fno-pic
+            -fno-plt
+        )
+        ;;
+    hosted)
+        ;;
+    *)
+        echo "aliencxx: invalid UNIOS_PROFILE=$PROFILE" >&2
+        exit 2
+        ;;
+ esac
+
+exec "$CLANGXX" "${args[@]}" "$@"

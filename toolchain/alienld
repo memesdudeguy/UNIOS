@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LD="${LD:-ld.lld}"
+TARGET="${UNIOS_TARGET:-i386-unknown-none-elf}"
+
+exec "$LD" -m elf_i386 "$@"
