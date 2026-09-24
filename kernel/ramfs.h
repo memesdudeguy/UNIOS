@@ -1,0 +1,34 @@
+#ifndef UNIOS_RAMFS_H
+#define UNIOS_RAMFS_H
+
+#include <stdint.h>
+
+#define RAMFS_MAX_NODES 64
+#define RAMFS_NAME_SIZE 32
+#define RAMFS_DATA_SIZE 1024
+
+enum ramfs_node_type {
+    RAMFS_DIRECTORY = 1,
+    RAMFS_FILE = 2
+};
+
+struct ramfs_node {
+    uint8_t used;
+    uint8_t type;
+    uint16_t parent;
+    char name[RAMFS_NAME_SIZE];
+    uint32_t size;
+    char data[RAMFS_DATA_SIZE];
+};
+
+void ramfs_init(void);
+int ramfs_mkdir(const char *path);
+int ramfs_touch(const char *path);
+int ramfs_write(const char *path, const char *data);
+int ramfs_read(const char *path, char *out, uint32_t capacity);
+int ramfs_list(const char *path, void (*print)(const char *name, uint8_t type));
+int ramfs_exists(const char *path);
+
+#endif
+
+int ramfs_is_directory(const char *path);

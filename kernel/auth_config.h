@@ -1,0 +1,6 @@
+#ifndef UNIOS_AUTH_CONFIG_H
+#define UNIOS_AUTH_CONFIG_H
+
+#define UNIOS_PASSWORD_CONFIGURED 0
+
+#endif

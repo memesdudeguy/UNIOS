@@ -1,0 +1,177 @@
+=== UNIOS diagnostics ===
+Thu Sep 24 04:57:40 PM MDT 2026
+
+=== compiler ===
+toolchain/aliencc: Bourne-Again shell script, ASCII text executable
+clang version 22.1.8
+Target: i386-unknown-none-elf
+Thread model: posix
+InstalledDir: /usr/bin
+
+=== files ===
+apps/hello
+apps/hello.c
+boot/boot.s
+kernel/auth_config.h
+kernel/compat/unimcode.h
+kernel/compat/unitl.c
+kernel/compat/unitl.h
+kernel/device-manager/device_manager.c
+kernel/device-manager/device_manager.h
+kernel/drivers/linux-port/alien_driver_api.h
+kernel/drivers/linux-port/README.md
+kernel/drivers/manifest.txt
+kernel/drivers/README.md
+kernel/kernel.c
+kernel/kernel.c.backup
+kernel/kernel.c.before-banner-fix
+kernel/kernel.c.before-banner-removal
+kernel/kernel.c.before-cd-cleanup
+kernel/kernel.c.before-cwd-display-fix
+kernel/kernel.c.before-dispatch-cleanup
+kernel/kernel.c.before-literal-newline-fix
+kernel/kernel.c.before-path-fix
+kernel/kernel.c.before-process-driver-fix
+kernel/kernel.c.before-prompt-fix
+kernel/kernel.c.before-ramfs
+kernel/kernel.c.before-shutdown-fix
+kernel/linker.ld
+kernel/ramfs.c
+kernel/ramfs.c.backup
+kernel/ramfs.c.before-duplicate-fix
+kernel/ramfs.h
+kernel/ramfs.h.backup
+toolchain/alienas
+toolchain/aliencc
+toolchain/aliencxx
+toolchain/alienld
+toolchain/backup/aliencc
+toolchain/backup/aliencxx
+toolchain/check-target.sh
+
+=== Makefile ===
+PROJECT := UNIOS
+BUILD := build
+ISO := iso
+
+CC := $(CURDIR)/toolchain/aliencc
+LD := ld.lld
+AS := clang
+
+CFLAGS := \
+	--target=i386-unknown-none-elf \
+	-ffreestanding \
+	-fno-builtin \
+	-fno-stack-protector \
+	-fno-pic \
+	-m32 \
+	-march=i486 \
+	-mno-sse \
+	-mno-mmx \
+	-mno-80387 \
+	-Wall -Wextra \
+	-O2
+
+KERNEL_OBJECTS := \
+	$(BUILD)/boot.o \
+	$(BUILD)/kernel.o \
+	$(BUILD)/ramfs.o \
+	$(BUILD)/unitl.o \
+	$(BUILD)/device_manager.o
+
+.PHONY: all iso run clean
+
+all: iso
+
+$(BUILD)/boot.o: boot/boot.s
+	mkdir -p $(BUILD)
+	$(AS) --target=i386-unknown-none-elf -m32 -c $< -o $@
+
+$(BUILD)/kernel.o: kernel/kernel.c kernel/ramfs.h kernel/auth_config.h
+	mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -Ikernel -c $< -o $@
+
+$(BUILD)/ramfs.o: kernel/ramfs.c kernel/ramfs.h
+	mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -Ikernel -c $< -o $@
+
+$(BUILD)/unitl.o: kernel/compat/unitl.c kernel/compat/unitl.h
+	mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -Ikernel -Ikernel/compat -c $< -o $@
+
+$(BUILD)/device_manager.o: \
+	kernel/device-manager/device_manager.c \
+	kernel/device-manager/device_manager.h \
+	kernel/drivers/linux-port/alien_driver_api.h
+	mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) \
+		-Ikernel \
+		-Ikernel/device-manager \
+		-Ikernel/drivers/linux-port \
+		-c $< -o $@
+
+$(BUILD)/unios.kernel: $(KERNEL_OBJECTS) kernel/linker.ld
+	$(LD) -m elf_i386 -T kernel/linker.ld \
+		-z noexecstack \
+		-o $@ \
+		$(KERNEL_OBJECTS)
+
+iso: $(BUILD)/unios.kernel
+	mkdir -p $(ISO)/boot
+	cp $(BUILD)/unios.kernel $(ISO)/boot/unios.kernel
+	grub-mkrescue -o $(BUILD)/unios.iso $(ISO)
+
+run: iso
+	qemu-system-i386 \
+		-cdrom $(BUILD)/unios.iso \
+		-m 32M \
+		-serial stdio
+
+clean:
+	rm -rf $(BUILD) $(ISO)/boot/unios.kernel
+
+=== stale implementations ===
+kernel/compat/unitl.h:6:enum unitl_syscall {
+kernel/compat/unitl.h:41:    uint32_t syscall_number,
+kernel/compat/unitl.c:28:    uint32_t syscall_number,
+kernel/compat/unitl.c:41:    switch (syscall_number) {
+kernel/kernel.c:357:        terminal_write("su: authentication backend is not implemented");
+kernel/kernel.c:368:        terminal_write("sudo: authentication backend is not implemented");
+kernel/kernel.c:524:static void command_cd_fixed(const char *argument)
+kernel/kernel.c:798:static void command_ps_fixed(void)
+kernel/kernel.c:815:static void command_kill_fixed(const char *argument)
+kernel/kernel.c:846:static void command_scan_fixed(void)
+kernel/kernel.c:854:static void command_orbit_fixed(void)
+kernel/kernel.c:866:static void command_dock_fixed(void)
+kernel/kernel.c:872:static void command_undock_fixed(void)
+kernel/kernel.c:878:static void command_fuel_fixed(void)
+kernel/kernel.c:884:static void command_crew_fixed(void)
+kernel/kernel.c:890:static void command_nav_fixed(void)
+kernel/kernel.c:896:static void command_comet_fixed(void)
+kernel/kernel.c:902:static void command_airlock_fixed(void)
+kernel/kernel.c:908:static void command_starmap_fixed(void)
+kernel/kernel.c:920:static void command_drivers_fixed(void)
+kernel/kernel.c:1019:        terminal_write("su: user authentication is not implemented");
+kernel/kernel.c:1025:        terminal_write("su: account database and authentication are not implemented");
+kernel/kernel.c:1031:        terminal_write("sudo: privilege escalation is disabled until users, passwords, and syscalls exist");
+kernel/kernel.c:1052:        terminal_write("filesystem support is not implemented");
+kernel/kernel.c:1058:        command_ps_fixed();
+kernel/kernel.c:1063:        command_kill_fixed(0);
+kernel/kernel.c:1068:        command_kill_fixed(command + 5);
+kernel/kernel.c:1074:        command_scan_fixed();
+kernel/kernel.c:1079:        command_orbit_fixed();
+kernel/kernel.c:1084:        command_dock_fixed();
+kernel/kernel.c:1089:        command_undock_fixed();
+kernel/kernel.c:1094:        command_fuel_fixed();
+kernel/kernel.c:1099:        command_crew_fixed();
+kernel/kernel.c:1104:        command_nav_fixed();
+kernel/kernel.c:1109:        command_comet_fixed();
+kernel/kernel.c:1114:        command_airlock_fixed();
+kernel/kernel.c:1119:        command_starmap_fixed();
+kernel/kernel.c:1124:        command_drivers_fixed();
+kernel/kernel.c:1143:        command_cd_fixed("/");
+kernel/kernel.c:1148:        command_cd_fixed(command + 3);
+kernel/kernel.c:1152:    terminal_write("unknown command");
+Makefile:10:	--target=i386-unknown-none-elf \
+Makefile:36:	$(AS) --target=i386-unknown-none-elf -m32 -c $< -o $@
+Makefile:62:	$(LD) -m elf_i386 -T kernel/linker.ld \

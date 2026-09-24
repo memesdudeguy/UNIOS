@@ -1,0 +1,6 @@
+vga builtin matched-by-class
+ps2 builtin matched-by-port
+pci disabled-until-enumeration
+usb disabled-until-enumeration
+network disabled-until-safe-pci-dma
+storage disabled-until-safe-pci-dma

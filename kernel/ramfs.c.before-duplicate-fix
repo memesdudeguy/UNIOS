@@ -1,0 +1,302 @@
+#include "ramfs.h"
+
+static struct ramfs_node nodes[RAMFS_MAX_NODES];
+
+static uint32_t length(const char *text)
+{
+    uint32_t n = 0;
+
+    if (!text)
+        return 0;
+
+    while (text[n])
+        n++;
+
+    return n;
+}
+
+static int equal(const char *a, const char *b)
+{
+    uint32_t i = 0;
+
+    if (!a || !b)
+        return 0;
+
+    while (a[i] && b[i]) {
+        if (a[i] != b[i])
+            return 0;
+        i++;
+    }
+
+    return a[i] == b[i];
+}
+
+static void copy_text(char *dst, const char *src, uint32_t size)
+{
+    uint32_t i = 0;
+
+    if (!dst || size == 0)
+        return;
+
+    while (src && src[i] && i + 1 < size) {
+        dst[i] = src[i];
+        i++;
+    }
+
+    dst[i] = 0;
+}
+
+static int find_child(uint16_t parent, const char *name)
+{
+    uint32_t i;
+
+    for (i = 0; i < RAMFS_MAX_NODES; i++) {
+        if (nodes[i].used &&
+            nodes[i].parent == parent &&
+            equal(nodes[i].name, name))
+            return (int)i;
+    }
+
+    return -1;
+}
+
+static int find_path(const char *path)
+{
+    char name[RAMFS_NAME_SIZE];
+    uint32_t i;
+    uint32_t j;
+    uint16_t current = 0;
+    int child;
+
+    if (!path || path[0] != '/')
+        return -1;
+
+    if (equal(path, "/"))
+        return 0;
+
+    i = 1;
+
+    while (path[i]) {
+        j = 0;
+
+        while (path[i] == '/')
+            i++;
+
+        if (!path[i])
+            break;
+
+        while (path[i] && path[i] != '/') {
+            if (j + 1 >= RAMFS_NAME_SIZE)
+                return -1;
+
+            name[j++] = path[i++];
+        }
+
+        name[j] = 0;
+        child = find_child(current, name);
+
+        if (child < 0)
+            return -1;
+
+        current = (uint16_t)child;
+    }
+
+    return (int)current;
+}
+
+static int split_path(
+    const char *path,
+    char *parent_path,
+    char *name
+)
+{
+    uint32_t n;
+    uint32_t slash;
+    uint32_t i;
+
+    if (!path || !parent_path || !name || path[0] != '/')
+        return -1;
+
+    n = length(path);
+
+    while (n > 1 && path[n - 1] == '/')
+        n--;
+
+    slash = n;
+
+    while (slash > 0 && path[slash - 1] != '/')
+        slash--;
+
+    if (n - slash >= RAMFS_NAME_SIZE)
+        return -1;
+
+    for (i = slash; i < n; i++)
+        name[i - slash] = path[i];
+
+    name[n - slash] = 0;
+
+    if (slash <= 1) {
+        parent_path[0] = '/';
+        parent_path[1] = 0;
+    } else {
+        for (i = 0; i < slash - 1; i++)
+            parent_path[i] = path[i];
+
+        parent_path[slash - 1] = 0;
+    }
+
+    return 0;
+}
+
+static int create_node(const char *path, uint8_t type)
+{
+    char parent_path[RAMFS_DATA_SIZE];
+    char name[RAMFS_NAME_SIZE];
+    int parent;
+    int node;
+    uint32_t i;
+
+    if (split_path(path, parent_path, name) < 0)
+        return -1;
+
+    parent = find_path(parent_path);
+
+    if (parent < 0 || nodes[parent].type != RAMFS_DIRECTORY)
+        return -2;
+
+    if (find_child((uint16_t)parent, name) >= 0)
+        return -3;
+
+    node = -1;
+
+    for (i = 1; i < RAMFS_MAX_NODES; i++) {
+        if (!nodes[i].used) {
+            node = (int)i;
+            break;
+        }
+    }
+
+    if (node < 0)
+        return -4;
+
+    nodes[node].used = 1;
+    nodes[node].type = type;
+    nodes[node].parent = (uint16_t)parent;
+    nodes[node].size = 0;
+    copy_text(nodes[node].name, name, RAMFS_NAME_SIZE);
+    nodes[node].data[0] = 0;
+
+    return node;
+}
+
+void ramfs_init(void)
+{
+    uint32_t i;
+
+    for (i = 0; i < RAMFS_MAX_NODES; i++)
+        nodes[i].used = 0;
+
+    nodes[0].used = 1;
+    nodes[0].type = RAMFS_DIRECTORY;
+    nodes[0].parent = 0;
+    nodes[0].size = 0;
+    copy_text(nodes[0].name, "/", RAMFS_NAME_SIZE);
+    nodes[0].data[0] = 0;
+}
+
+int ramfs_mkdir(const char *path)
+{
+    return create_node(path, RAMFS_DIRECTORY);
+}
+
+int ramfs_touch(const char *path)
+{
+    return create_node(path, RAMFS_FILE);
+}
+
+int ramfs_write(const char *path, const char *data)
+{
+    int node;
+    uint32_t size;
+
+    node = find_path(path);
+
+    if (node < 0 || nodes[node].type != RAMFS_FILE)
+        return -1;
+
+    size = length(data);
+
+    if (size >= RAMFS_DATA_SIZE)
+        return -2;
+
+    copy_text(nodes[node].data, data, RAMFS_DATA_SIZE);
+    nodes[node].size = size;
+
+    return 0;
+}
+
+int ramfs_read(const char *path, char *output, uint32_t capacity)
+{
+    int node;
+
+    if (!output || capacity == 0)
+        return -1;
+
+    node = find_path(path);
+
+    if (node < 0 || nodes[node].type != RAMFS_FILE)
+        return -2;
+
+    copy_text(output, nodes[node].data, capacity);
+    return (int)nodes[node].size;
+}
+
+int ramfs_exists(const char *path)
+{
+    return find_path(path) >= 0;
+}
+
+int ramfs_list(const char *path, void (*print)(const char *, uint8_t))
+{
+    int parent;
+    uint32_t i;
+
+    if (!print)
+        return -1;
+
+    parent = find_path(path);
+
+    if (parent < 0 || nodes[parent].type != RAMFS_DIRECTORY)
+        return -2;
+
+    for (i = 0; i < RAMFS_MAX_NODES; i++) {
+        if (nodes[i].used &&
+            nodes[i].parent == (uint16_t)parent)
+            print(nodes[i].name, nodes[i].type);
+    }
+
+    return 0;
+}
+
+int ramfs_list(const char *path, void (*print)(const char *name, uint8_t type))
+{
+    int parent;
+    uint32_t i;
+
+    if (!print)
+        return -1;
+
+    parent = find_path(path);
+
+    if (parent < 0 || nodes[parent].type != RAMFS_DIRECTORY)
+        return -2;
+
+    for (i = 0; i < RAMFS_MAX_NODES; i++) {
+        if (nodes[i].used &&
+            nodes[i].parent == (uint16_t)parent) {
+            print(nodes[i].name, nodes[i].type);
+        }
+    }
+
+    return 0;
+}

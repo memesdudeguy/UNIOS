@@ -545,389 +545,6 @@ static void command_cd_fixed(const char *argument)
     string_copy(cwd, resolved, sizeof(cwd));
 }
 
-
-static void terminal_shutdown(void)
-{
-    /*
-     * Use QEMU's ISA debug-exit mechanism.
-     * This exits the VM cleanly instead of hanging forever.
-     */
-    terminal_write("shutdown complete");
-    terminal_putc(10);
-
-    /* QEMU debug-exit: iobase=0x501, iosize=1 */
-    port_out8(0x501, 0x00);
-
-    /*
-     * If the platform does not support debug-exit, halt safely.
-     * This avoids a CPU loop that freezes the guest.
-     */
-    for (;;) {
-        __asm__ volatile ("cli; hlt");
-    }
-}
-
-
-struct unios_proc {
-    int pid;
-    char name[16];
-    int alive;
-};
-
-static struct unios_proc proc_table[8];
-static int proc_count = 0;
-
-static void process_init(void)
-{
-    proc_count = 0;
-
-    proc_table[proc_count].pid = 1;
-    proc_table[proc_count].alive = 1;
-    string_copy(proc_table[proc_count].name, "kernel", 16);
-    proc_count++;
-
-    proc_table[proc_count].pid = 2;
-    proc_table[proc_count].alive = 1;
-    string_copy(proc_table[proc_count].name, "shell", 16);
-    proc_count++;
-}
-
-static void command_ps(void)
-{
-    terminal_write("PID COMMAND");
-    terminal_putc(10);
-
-    for (int i = 0; i < proc_count; i++) {
-        char tmp[32];
-        tmp[0] = 0;
-
-        if (proc_table[i].pid < 10) {
-            tmp[0] = '0' + proc_table[i].pid;
-            tmp[1] = 0;
-        } else {
-            tmp[0] = '0' + (proc_table[i].pid / 10);
-            tmp[1] = '0' + (proc_table[i].pid % 10);
-            tmp[2] = 0;
-        }
-
-        terminal_write(tmp);
-        terminal_putc(' ');
-        terminal_write(proc_table[i].name);
-        terminal_putc(10);
-    }
-}
-
-static void command_kill(const char *arg)
-{
-    if (!arg || !arg[0]) {
-        terminal_write("kill: missing pid");
-        terminal_putc(10);
-        return;
-    }
-
-    int pid = 0;
-
-    for (int i = 0; arg[i] && arg[i] >= '0' && arg[i] <= '9'; i++) {
-        pid = pid * 10 + (arg[i] - '0');
-    }
-
-    if (pid <= 0) {
-        terminal_write("kill: invalid pid");
-        terminal_putc(10);
-        return;
-    }
-
-    for (int i = 0; i < proc_count; i++) {
-        if (proc_table[i].pid == pid) {
-            proc_table[i].alive = 0;
-            terminal_write("killed");
-            terminal_putc(10);
-            return;
-        }
-    }
-
-    terminal_write("kill: no such process");
-    terminal_putc(10);
-}
-
-static void command_scan(void)
-{
-    terminal_write("scan: PCI, USB, ISA, ACPI active");
-    terminal_putc(10);
-    terminal_write("vga");
-    terminal_putc(10);
-    terminal_write("ps2");
-    terminal_putc(10);
-    terminal_write("pci");
-    terminal_putc(10);
-}
-
-static void command_orbit(void)
-{
-    terminal_write("orbit: devices detected");
-    terminal_putc(10);
-    terminal_write("vga");
-    terminal_putc(10);
-    terminal_write("ps2");
-    terminal_putc(10);
-    terminal_write("pci");
-    terminal_putc(10);
-    terminal_write("disk");
-    terminal_putc(10);
-}
-
-static void command_dock(void)
-{
-    terminal_write("dock: / mounted");
-    terminal_putc(10);
-    terminal_write("dock: /home mounted");
-    terminal_putc(10);
-    terminal_write("dock: /tmp mounted");
-    terminal_putc(10);
-}
-
-static void command_undock(void)
-{
-    terminal_write("undock: /tmp unmounted");
-    terminal_putc(10);
-    terminal_write("undock: /home unmounted");
-    terminal_putc(10);
-}
-
-static void command_fuel(void)
-{
-    terminal_write("fuel: memory 32M total");
-    terminal_putc(10);
-    terminal_write("fuel: free 24M");
-    terminal_putc(10);
-}
-
-static void command_crew(void)
-{
-    terminal_write("crew: root");
-    terminal_putc(10);
-    terminal_write("crew: shell");
-    terminal_putc(10);
-}
-
-static void command_nav(void)
-{
-    terminal_write(cwd);
-    terminal_putc(10);
-}
-
-static void command_comet(void)
-{
-    terminal_write("comet: searching filesystem");
-    terminal_putc(10);
-    terminal_write("/etc/motd");
-    terminal_putc(10);
-    terminal_write("/home/user/note.txt");
-    terminal_putc(10);
-}
-
-static void command_airlock(void)
-{
-    terminal_write("airlock: safe remove mode active");
-    terminal_putc(10);
-}
-
-static void command_starmap(void)
-{
-    terminal_write("/");
-    terminal_putc(10);
-    terminal_write("/etc");
-    terminal_putc(10);
-    terminal_write("/home");
-    terminal_putc(10);
-    terminal_write("/tmp");
-    terminal_putc(10);
-}
-
-static void command_drivers(void)
-{
-    terminal_write("drivers: active");
-    terminal_putc(10);
-    terminal_write("vga");
-    terminal_putc(10);
-    terminal_write("ps2");
-    terminal_putc(10);
-    terminal_write("pci");
-    terminal_putc(10);
-}
-
-
-#define UNIOS_PROC_MAX 8
-
-struct unios_process {
-    uint32_t pid;
-    const char *name;
-    uint8_t alive;
-};
-
-static struct unios_process unios_processes[UNIOS_PROC_MAX] = {
-    { 1, "kernel", 1 },
-    { 2, "shell", 1 }
-};
-
-static uint32_t unios_process_count = 2;
-
-static int unios_parse_pid(const char *text, uint32_t *pid)
-{
-    uint32_t value = 0;
-    uint32_t i = 0;
-
-    if (!text || !text[0] || !pid)
-        return 0;
-
-    while (text[i]) {
-        if (text[i] < '0' || text[i] > '9')
-            return 0;
-
-        value = value * 10 + (uint32_t)(text[i] - '0');
-        i++;
-    }
-
-    if (!value)
-        return 0;
-
-    *pid = value;
-    return 1;
-}
-
-static void command_ps_fixed(void)
-{
-    uint32_t i;
-
-    terminal_write("PID STATE COMMAND");
-    terminal_putc(10);
-
-    for (i = 0; i < unios_process_count; i++) {
-        if (!unios_processes[i].alive)
-            continue;
-
-        terminal_write(unios_processes[i].pid == 1 ? "1   run   " : "2   run   ");
-        terminal_write(unios_processes[i].name);
-        terminal_putc(10);
-    }
-}
-
-static void command_kill_fixed(const char *argument)
-{
-    uint32_t pid;
-    uint32_t i;
-
-    if (!unios_parse_pid(argument, &pid)) {
-        terminal_write("kill: usage: kill PID");
-        terminal_putc(10);
-        return;
-    }
-
-    if (pid == 1) {
-        terminal_write("kill: refusing to terminate kernel");
-        terminal_putc(10);
-        return;
-    }
-
-    for (i = 0; i < unios_process_count; i++) {
-        if (unios_processes[i].pid == pid &&
-            unios_processes[i].alive) {
-            unios_processes[i].alive = 0;
-            terminal_write("kill: process terminated");
-            terminal_putc(10);
-            return;
-        }
-    }
-
-    terminal_write("kill: no such process");
-    terminal_putc(10);
-}
-
-static void command_scan_fixed(void)
-{
-    terminal_write("scan: no PCI hardware exposed by current QEMU profile");
-    terminal_putc(10);
-    terminal_write("scan: VGA and PS/2 drivers available");
-    terminal_putc(10);
-}
-
-static void command_orbit_fixed(void)
-{
-    terminal_write("orbit: UNIOS device manager");
-    terminal_putc(10);
-    terminal_write("driver: vga      matched");
-    terminal_putc(10);
-    terminal_write("driver: ps2      matched");
-    terminal_putc(10);
-    terminal_write("driver: pci      not present");
-    terminal_putc(10);
-}
-
-static void command_dock_fixed(void)
-{
-    terminal_write("dock: ramfs mounted at /");
-    terminal_putc(10);
-}
-
-static void command_undock_fixed(void)
-{
-    terminal_write("undock: removable devices are not present");
-    terminal_putc(10);
-}
-
-static void command_fuel_fixed(void)
-{
-    terminal_write("fuel: memory allocator status unavailable");
-    terminal_putc(10);
-}
-
-static void command_crew_fixed(void)
-{
-    terminal_write("crew: root shell active");
-    terminal_putc(10);
-}
-
-static void command_nav_fixed(void)
-{
-    terminal_write(cwd);
-    terminal_putc(10);
-}
-
-static void command_comet_fixed(void)
-{
-    terminal_write("comet: device discovery complete");
-    terminal_putc(10);
-}
-
-static void command_airlock_fixed(void)
-{
-    terminal_write("airlock: no removable device attached");
-    terminal_putc(10);
-}
-
-static void command_starmap_fixed(void)
-{
-    terminal_write("/");
-    terminal_putc(10);
-    terminal_write("/etc");
-    terminal_putc(10);
-    terminal_write("/home");
-    terminal_putc(10);
-    terminal_write("/tmp");
-    terminal_putc(10);
-}
-
-static void command_drivers_fixed(void)
-{
-    terminal_write("drivers:");
-    terminal_putc(10);
-    terminal_write("vga: matched and active");
-    terminal_putc(10);
-    terminal_write("ps2: matched and active");
-    terminal_putc(10);
-}
-
-
 static void terminal_command(const char *command)
 {
     if (auth_command(command))
@@ -965,9 +582,7 @@ static void terminal_command(const char *command)
     }
 
     if (command_is(command, "clear")) {
-        process_init();
-
-    terminal_clear();
+        terminal_clear();
         return;
     }
 
@@ -979,9 +594,8 @@ static void terminal_command(const char *command)
     }
 
     if (command_is(command, "shutdown")) {
-        terminal_write("shutting down...");
+        terminal_write("shutdown requested; ACPI power control is not implemented");
         terminal_putc(10);
-        terminal_shutdown();
         return;
     }
 
@@ -1054,77 +668,43 @@ static void terminal_command(const char *command)
         return;
     }
 
-    if (command_is(command, "ps")) {
-        command_ps_fixed();
+    if (command_is(command, "ps") ||
+        command_is(command, "kill") ||
+        command_starts_with(command, "kill ")) {
+        terminal_write("process management is not implemented");
+        terminal_putc(10);
         return;
     }
 
-    if (command_is(command, "kill")) {
-        command_kill_fixed(0);
+    if (command_is(command, "mount") ||
+        command_is(command, "umount") ||
+        command_is(command, "dock") ||
+        command_is(command, "undock") ||
+        command_is(command, "starmap")) {
+        terminal_write("storage and filesystem support are not implemented");
+        terminal_putc(10);
         return;
     }
 
-    if (command_starts_with(command, "kill ")) {
-        command_kill_fixed(command + 5);
-        return;
-    }
-
-
-    if (command_is(command, "scan")) {
-        command_scan_fixed();
-        return;
-    }
-
-    if (command_is(command, "orbit")) {
-        command_orbit_fixed();
-        return;
-    }
-
-    if (command_is(command, "dock")) {
-        command_dock_fixed();
-        return;
-    }
-
-    if (command_is(command, "undock")) {
-        command_undock_fixed();
+    if (command_is(command, "scan") ||
+        command_is(command, "orbit") ||
+        command_is(command, "drivers")) {
+        terminal_write("device manager is not connected to the kernel build yet");
+        terminal_putc(10);
         return;
     }
 
     if (command_is(command, "fuel")) {
-        command_fuel_fixed();
+        terminal_write("memory and resource reporting is not implemented");
+        terminal_putc(10);
         return;
     }
 
     if (command_is(command, "crew")) {
-        command_crew_fixed();
+        terminal_write("process listing is not implemented");
+        terminal_putc(10);
         return;
     }
-
-    if (command_is(command, "nav")) {
-        command_nav_fixed();
-        return;
-    }
-
-    if (command_is(command, "comet")) {
-        command_comet_fixed();
-        return;
-    }
-
-    if (command_is(command, "airlock")) {
-        command_airlock_fixed();
-        return;
-    }
-
-    if (command_is(command, "starmap")) {
-        command_starmap_fixed();
-        return;
-    }
-
-    if (command_is(command, "drivers")) {
-        command_drivers_fixed();
-        return;
-    }
-
 
     if (command_is(command, "comet")) {
         terminal_write("file search requires filesystem support");
@@ -1165,7 +745,7 @@ static void terminal_readline(void)
     char buffer[128];
     uint32_t length = 0;
 
-    print_prompt();
+    terminal_write("unios:/$ ");
 
     for (;;) {
         int key = keyboard_read_key();
@@ -1175,7 +755,7 @@ static void terminal_readline(void)
             terminal_putc(10);
             terminal_command(buffer);
             length = 0;
-            print_prompt();
+            terminal_write("unios:/$ ");
             continue;
         }
 
