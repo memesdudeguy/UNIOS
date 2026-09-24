@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+    echo "usage: tools/driver-port path/to/linux-driver.c"
+    exit 1
+fi
+
+input="$1"
+name="$(basename "$input")"
+output="kernel/drivers/linux-port/${name%.c}_alien.c"
+
+cp "$input" "$output"
+
+sed -i \
+  -e 's/printk(/alien_log(/g' \
+  -e 's/kmalloc(/alien_alloc(/g' \
+  -e 's/kzalloc(/alien_alloc(/g' \
+  -e 's/kfree(/alien_free(/g' \
+  "$output"
+
+echo "Created preliminary port: $output"
+echo "Manual API, locking, IRQ, DMA, PCI, and lifecycle review is required."

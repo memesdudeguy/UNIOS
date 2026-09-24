@@ -1,0 +1,4 @@
+build/
+iso/boot/unios.kernel
+*.o
+*.iso

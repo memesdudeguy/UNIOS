@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+database="drivers/catalog/drivers.db"
+
+echo "UNIOS device-to-driver mapping"
+echo
+
+while read -r bus vendor device class subclass interface priority driver; do
+    case "$bus" in
+        ""|\#*) continue ;;
+    esac
+
+    printf "%-5s %-8s %-8s -> %s (priority %s)\n" \
+        "$bus" "$vendor" "$device" "$driver" "$priority"
+done < "$database"
+
+echo
+echo "Unused removable drivers may be garbage-collected after safe unload."

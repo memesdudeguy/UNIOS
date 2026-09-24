@@ -1,0 +1,59 @@
+# OrbitCLI command registry
+# Unix-compatible commands
+
+ls       filesystem.list
+cd       filesystem.chdir
+pwd      filesystem.getcwd
+cat      filesystem.read
+cp       filesystem.copy
+mv       filesystem.move
+rm       filesystem.remove
+mkdir    filesystem.mkdir
+rmdir    filesystem.rmdir
+touch    filesystem.touch
+echo     terminal.echo
+clear    terminal.clear
+help     terminal.help
+uname    system.info
+ps       process.list
+kill     process.kill
+mount    filesystem.mount
+umount   filesystem.umount
+free     memory.info
+df       filesystem.space
+reboot   system.reboot
+poweroff system.poweroff
+
+# UNIOS OrbitCLI commands
+
+scan     device.scan
+orbit    device.list
+dock     filesystem.mount
+undock   filesystem.umount
+launch   process.start
+crew     process.list
+fuel     system.resources
+nav      filesystem.getcwd
+comet    filesystem.search
+beam     terminal.send
+airlock  filesystem.safe_remove
+starmap  filesystem.mounts
+aliencc  compiler.c
+aliencxx compiler.cpp
+drivers  driver.list
+rescan   device.rescan
+unload   driver.unload
+
+# Privilege and identity commands
+
+sudo       auth.execute_as_root
+su         auth.switch_user
+whoami     auth.current_user
+id         auth.identity
+passwd     auth.change_password
+
+# Space-themed privilege aliases
+
+captain    auth.execute_as_root
+transfer   auth.switch_user
+identity   auth.current_user

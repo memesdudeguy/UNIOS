@@ -1,0 +1,39 @@
+UNIOS privilege command behavior
+
+sudo command
+    Verify current user's password.
+    Require administrator permission.
+    Run only the requested command with temporary privilege.
+    Example:
+        sudo mount /dev/disk0 /mnt
+        sudo drivers rescan
+
+su username
+    Verify the target user's password.
+    Start OrbitCLI as that user.
+    Example:
+        su pilot
+        su root
+
+su
+    Switch to root only if root authentication succeeds.
+
+whoami
+    Display the current username.
+
+id
+    Display UID, GID, groups, and capabilities.
+
+passwd
+    Change the current user's password.
+
+Space-themed aliases:
+
+captain command
+    Same operation as sudo.
+
+transfer username
+    Same operation as su.
+
+identity
+    Same operation as whoami.
