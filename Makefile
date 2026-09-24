@@ -25,7 +25,9 @@ KERNEL_OBJECTS := \
 	$(BUILD)/kernel.o \
 	$(BUILD)/ramfs.o \
 	$(BUILD)/unitl.o \
-	$(BUILD)/device_manager.o
+	$(BUILD)/device_manager.o \
+	$(BUILD)/elf32.o \
+	$(BUILD)/process.o
 
 .PHONY: all iso run clean
 
@@ -35,7 +37,7 @@ $(BUILD)/boot.o: boot/boot.s
 	mkdir -p $(BUILD)
 	$(AS) --target=i386-unknown-none-elf -m32 -c $< -o $@
 
-$(BUILD)/kernel.o: kernel/kernel.c kernel/ramfs.h kernel/auth_config.h
+$(BUILD)/kernel.o: kernel/kernel.c kernel/ramfs.h kernel/auth_config.h kernel/elf32.h kernel/process.h
 	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -Ikernel -c $< -o $@
 
@@ -57,6 +59,14 @@ $(BUILD)/device_manager.o: \
 		-Ikernel/device-manager \
 		-Ikernel/drivers/linux-port \
 		-c $< -o $@
+
+$(BUILD)/elf32.o: kernel/elf32.c kernel/elf32.h
+	mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -Ikernel -c $< -o $@
+
+$(BUILD)/process.o: kernel/process.c kernel/process.h
+	mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -Ikernel -c $< -o $@
 
 $(BUILD)/unios.kernel: $(KERNEL_OBJECTS) kernel/linker.ld
 	$(LD) -m elf_i386 -T kernel/linker.ld \
