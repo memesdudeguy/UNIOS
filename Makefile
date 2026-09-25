@@ -12,10 +12,14 @@ CFLAGS := \
 	-m32 -march=i486 -mno-sse -mno-mmx -mno-80387 \
 	-Wall -Wextra -O2
 
+# Keep this list synchronized with files present in the repository.
 KERNEL_OBJECTS := \
-	$(BUILD)/boot.o $(BUILD)/kernel.o $(BUILD)/ramfs.o \
-	$(BUILD)/unitl.o $(BUILD)/device_manager.o \
-	$(BUILD)/elf32.o $(BUILD)/process.o
+	$(BUILD)/boot.o \
+	$(BUILD)/kernel.o \
+	$(BUILD)/unitl.o \
+	$(BUILD)/device_manager.o \
+	$(BUILD)/elf32.o \
+	$(BUILD)/process.o
 
 .PHONY: all iso run clean help check run-debug
 
@@ -35,17 +39,14 @@ check:
 	@command -v ld.lld >/dev/null || { echo 'Missing: ld.lld'; exit 1; }
 	@command -v grub-mkrescue >/dev/null || { echo 'Missing: grub-mkrescue'; exit 1; }
 	@command -v qemu-system-i386 >/dev/null || { echo 'Missing: qemu-system-i386'; exit 1; }
-	@echo 'All required build tools are available.'
+	@test -x toolchain/aliencc || { echo 'Missing executable: toolchain/aliencc'; exit 1; }
+	@echo 'All required build tools and source files are available.'
 
 $(BUILD)/boot.o: boot/boot.s
 	mkdir -p $(BUILD)
 	$(AS) --target=i386-unknown-none-elf -m32 -c $< -o $@
 
-$(BUILD)/kernel.o: kernel/kernel.c kernel/ramfs.h kernel/auth_config.h kernel/elf32.h kernel/process.h
-	mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -Ikernel -c $< -o $@
-
-$(BUILD)/ramfs.o: kernel/ramfs.c kernel/ramfs.h
+$(BUILD)/kernel.o: kernel/kernel.c kernel/elf32.h kernel/process.h
 	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -Ikernel -c $< -o $@
 
@@ -74,7 +75,7 @@ iso: $(BUILD)/unios.kernel
 	grub-mkrescue -o $(BUILD)/unios.iso $(ISO)
 
 run: iso
-	@echo 'Starting UNIOS. Press Ctrl+C to return to the host shell.'
+	@echo 'Starting UNIOS i386. Press Ctrl+C to return to the host shell.'
 	qemu-system-i386 -cdrom $(BUILD)/unios.iso -m 32M -serial stdio
 
 run-debug: iso
