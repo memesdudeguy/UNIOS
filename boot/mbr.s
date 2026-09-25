@@ -8,7 +8,7 @@ _start:
     movw %ax, %ds
     movw %ax, %es
     movw %ax, %ss
-    movw $0x7c00, %sp
+    movl $0x7c00, %esp
 
     movw $disk_address_packet, %si
     movw $0x42, %ax
@@ -62,6 +62,11 @@ gdt:
     .quad 0x0000000000000000
     .quad 0x00cf9a000000ffff
     .quad 0x00cf92000000ffff
+gdt_end:
 gdt_descriptor:
-    .word gdt_descriptor - gdt - 1
+    .word gdt_end - gdt - 1
     .long gdt
+
+.section .mbrsig, "a"
+.align 1
+.byte 0x55, 0xaa
