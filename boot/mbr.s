@@ -3,88 +3,97 @@
  * Runs in 16-bit real mode at 0x7c00. Loads build/kernel.bin from disk
  * sectors 2..N into physical memory at 0x10000 using BIOS INT 13h, AH=42h
  * (extended read), enables A20 via the fast gate, loads a tiny GDT, then
- * far-jumps into 32-bit protected mode and transfers control to _start of
- * the loaded image (boot/boot.s -> kernel_main).
+ * enters 32-bit protected mode and jumps to _start of the loaded image
+ * (boot/boot.s -> kernel_main).
  *
- * Everything lives in .text so the whole file links as one contiguous
- * 510-byte blob; the .mbrsig section supplies bytes 510..511.
+ * IMPORTANT: this file is written as explicit raw instruction encodings
+ * (.byte directives) on purpose. clang's integrated assembler with -m16
+ * mis-assembles several instructions here (it drops the 0x66 operand-size
+ * prefix on `movw $imm16, %reg`, emitting e.g. `bc 00 7c b2 80` instead of
+ * `66 bc 00 7c`), which corrupts %esp/%esi, makes the INT 13h disk read
+ * fault, and trips SeaBIOS' reboot handler — the classic "booting from
+ * hard disk..." loop. Raw bytes are immune to assembler quirks. Each
+ * encoding is annotated with the mnemonic it implements.
+ *
+ * Layout note: everything must stay below offset 510 because the linker
+ * script places .mbrsig at 0x7dfe (no room for padding beyond 512 bytes).
  */
 
 .section .text
 .code16
 .globl _start
 _start:
-    cli
-    cld
-    xorw %ax, %ax
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %ss
-    movw $0x7c00, %sp        /* valid 16-bit stack inside our own segment */
+    .byte 0xfa                          /* cli                                    */
+    .byte 0xfc                          /* cld                                    */
+    .byte 0x31, 0xc0                    /* xor    %ax,%ax                         */
+    .byte 0x8e, 0xd8                    /* mov    %ax,%ds                         */
+    .byte 0x8e, 0xc0                    /* mov    %ax,%es                         */
+    .byte 0x8e, 0xd0                    /* mov    %ax,%ss                         */
+    .byte 0x66, 0xbc, 0x00, 0x7c, 0x00, 0x00  /* movabs $0x7c00,%esp (16-bit opsize) */
 
-    /* ---- Load kernel: LBA 1, 64 sectors -> linear 0x10000 ---- */
-    movb $0x80, %dl          /* first hard disk (QEMU IDE) */
-    movw $dap, %si
-    movw $0x42, %ax
-    int $0x13
-    jc disk_error
+    /* ---- Load kernel: LBA 1, 64 sectors -> linear 0x10000 (ES:BX) ---- */
+    .byte 0xb8, 0x00, 0x10              /* mov    $0x1000,%ax   (kernel dst seg)  */
+    .byte 0x8e, 0xc0                    /* mov    %ax,%es                        */
+    .byte 0xbb, 0x00, 0x00              /* mov    $0,%bx        (kernel dst off)  */
+    .byte 0xba, 0x80, 0x00              /* mov    $0x80,%dx     (first HDD)       */
+    .byte 0xbe
+    .word dap                           /* mov    $dap,%si  (relocated to 0x7c00+) */
+    .byte 0xb8, 0x42, 0x00              /* mov    $0x42,%ax   (AH=42 extended read) */
+    .byte 0xcd, 0x13                    /* int    $0x13                           */
+    .byte 0x72, 0x06                    /* jc     disk_error  (+6 bytes)          */
 
     /* ---- Enable A20 via fast gate (port 0x92) ---- */
-    inb $0x92, %al
-    orb $0x02, %al
-    outb %al, $0x92
+    .byte 0xe4, 0x92                    /* in     $0x92,%al                       */
+    .byte 0x0c, 0x02                    /* or     $0x02,%al                       */
+    .byte 0xe6, 0x92                    /* out    %al,$0x92                       */
 
     /* ---- Enter protected mode ---- */
-    cli
-    lgdt [gdt_descriptor]    /* memory operand (brackets required in -m16;
-                              * without them clang emits a broken 3-byte
-                              * form that loads the wrong GDT base) */
-    movl %cr0, %eax
-    orl  $0x01, %eax         /* PE */
-    movl %eax, %cr0
-    ljmp $0x08, $protected_mode
+    .byte 0xfa                          /* cli                                    */
+    .byte 0x0f, 0x01, 0x16              /* lgdt   gdt_descriptor (mem operand)     */
+    .word gdt_descriptor                /*   16-bit absolute address of the desc.  */
+    .byte 0x0f, 0x20, 0xc0              /* mov    %cr0,%eax                       */
+    .byte 0x66, 0x83, 0xc8, 0x01        /* or     $0x01,%ax   (PE bit)            */
+    .byte 0x0f, 0x22, 0xc0              /* mov    %eax,%cr0                       */
+    /* far jump: ea <offset:16> <selector:16> — reload CS with 0x08 */
+    .byte 0xea
+    .word pm_entry - . + 0x7c00         /*   offset = protected-mode entry (reloc) */
+    .word 0x0008                        /*   selector = flat code32                */
 
+/* ---- 32-bit protected mode ---- */
 .code32
-protected_mode:
-    movw $0x10, %ax
-    movw %ax, %ds
-    movw %ax, %es
-    movw %ax, %ss
-    movw %ax, %fs
-    movw %ax, %gs
-    movl $0x9000, %esp       /* scratch stack below the kernel image */
+pm_entry:
+    .byte 0xb8, 0x10, 0x00, 0x00, 0x00  /* mov    $0x10,%eax  (flat data sel)     */
+    .byte 0x8e, 0xd8                    /* mov    %eax,%ds                        */
+    .byte 0x8e, 0xc0                    /* mov    %eax,%es                        */
+    .byte 0x8e, 0xd0                    /* mov    %eax,%ss                        */
+    .byte 0x8e, 0xe0                    /* mov    %eax,%fs                        */
+    .byte 0x8e, 0xe8                    /* mov    %eax,%gs                        */
+    .byte 0xbc, 0x00, 0x90, 0x00, 0x00  /* mov    $0x9000,%esp (scratch stack)    */
+    /* Jump to the loaded kernel at physical 0x10000 (linked there; see
+     * kernel/linker.ld). Direct absolute jump keeps CS = 0x08 flat code. */
+    .byte 0xb8, 0x00, 0x00, 0x01, 0x00  /* mov    $0x10000,%eax                   */
+    .byte 0xff, 0xe0                    /* jmp    *%eax  -> _start in boot/boot.s */
 
-    /* Transfer control to the loaded kernel at physical 0x10000.
-     * A memory-indirect FAR JUMP (opcode FF /5) is used deliberately:
-     * clang's `ljmp $sel, $imm` form under -m16 emits a broken 32-bit
-     * far-pointer immediate (selector lands in the high half of the
-     * offset), which jumps into garbage and trips SeaBIOS' triple-fault
-     * reboot handler — the classic "boot from hard disk" loop. */
-    ljmp *pm_kernel_ptr
-
-.align 4
-pm_kernel_ptr:
-    .long 0x10000            /* EIP = kernel entry (_start in boot/boot.s) */
-    .word 0x0008             /* CS  = flat code32 selector from our GDT */
-
+/* On-disk read failure: print 'D' through the BIOS TTY, then halt. */
 disk_error:
-    movb $'D', %al           /* print 'D' via BIOS TTY on disk failure */
-    movb $0x0e, %ah
-    int $0x10
+    .byte 0xb0, 'D'                     /* mov    $'D',%al                        */
+    .byte 0xb4, 0x0e                    /* mov    $0x0e,%ah   (teletype output)   */
+    .byte 0xcd, 0x10                    /* int    $0x10                           */
 halt_loop:
-    cli
-    hlt
-    jmp halt_loop
+    .byte 0xfa                          /* cli                                    */
+    .byte 0xf4                          /* hlt                                    */
+    .byte 0xeb, 0xfe                    /* jmp    halt_loop  (-2)                 */
 
-/* ---- data (must fit within the 512-byte sector) ---- */
+/* ---- data (kept before offset 510 by the layout above) ---- */
+/* Disk Address Packet for INT 13h AH=42h */
 .align 4
 dap:
-    .byte 0x10               /* packet size */
-    .byte 0
-    .word 64                 /* sector count (KERNEL_SECTORS) */
-    .word 0x0000             /* transfer offset */
-    .word 0x1000             /* transfer segment -> linear 0x10000 */
-    .quad 1                  /* starting LBA (sector after MBR) */
+    .byte 0x10                          /* packet size                            */
+    .byte 0                             /* reserved                               */
+    .word 64                            /* sector count (KERNEL_SECTORS)          */
+    .word 0x0000                        /* transfer buffer offset (BX)            */
+    .word 0x1000                        /* transfer buffer segment (ES) -> 0x10000 */
+    .quad 1                             /* starting LBA (sector after the MBR)    */
 
 /* GDT: null, code32 (0x08), data32 (0x10) */
 .align 8
@@ -93,10 +102,11 @@ gdt_start:
     .quad 0x00cf9a000000ffff
     .quad 0x00cf92000000ffff
 gdt_end:
+.align 2
 gdt_descriptor:
-    .word gdt_end - gdt_start - 1
-    .long gdt_start
+    .word gdt_end - gdt_start - 1       /* limit (bytes)                          */
+    .long gdt_start                     /* 32-bit base address                    */
 
 .section .mbrsig, "a"
 .align 1
-.byte 0x55, 0xaa
+.byte 0x55, 0xaa                        /* BIOS boot signature (offsets 510/511)  */
