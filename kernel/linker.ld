@@ -2,11 +2,10 @@ ENTRY(_start)
 
 SECTIONS
 {
-    . = 1M;
+    . = 0x10000;
 
     .text ALIGN(4K) :
     {
-        *(.multiboot)
         *(.text)
     }
 
