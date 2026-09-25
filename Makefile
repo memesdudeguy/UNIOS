@@ -8,28 +8,11 @@ LD := ld.lld
 AS := clang
 OBJCOPY := llvm-objcopy
 
-# CPU profile: default targets modern x86_64 machines (x86-64-v2: SSE4.2,
-# POPCNT and friends are on every Intel Nehalem+ / AMD Excavator+ CPU).
-# Override with `make UNIOS_CPU=i486` for legacy 32-bit QEMU/ISA testing.
-UNIOS_CPU ?= x86-64-v2
-export UNIOS_CPU
-
-ifeq ($(filter i386 i486 pentium,$(UNIOS_CPU)),)
-ARCH_CFLAGS := -march=$(UNIOS_CPU) -mtune=generic
-else
-ARCH_CFLAGS := -march=$(UNIOS_CPU) -mno-sse -mno-mmx -mno-80387
-endif
-
 CFLAGS := \
 	--target=i386-unknown-none-elf \
 	-ffreestanding -fno-builtin -fno-stack-protector -fno-pic \
-	-m32 $(ARCH_CFLAGS) \
-	-fomit-frame-pointer \
+	-m32 -march=i486 -mno-sse -mno-mmx -mno-80387 \
 	-Wall -Wextra -O2
-
-DRIVER_SOURCES := $(wildcard kernel/drivers/*.c kernel/drivers/*/*.c)
-# Flatten paths: kernel/drivers/pci.c -> build/drv_kernel_drivers_pci.o
-DRIVER_OBJECTS := $(patsubst %.c,$(BUILD)/drv_%.o,$(subst /,_,$(patsubst kernel/%,%,$(DRIVER_SOURCES))))
 
 KERNEL_OBJECTS := \
 	$(BUILD)/boot.o \
@@ -37,10 +20,9 @@ KERNEL_OBJECTS := \
 	$(BUILD)/unitl.o \
 	$(BUILD)/device_manager.o \
 	$(BUILD)/elf32.o \
-	$(BUILD)/process.o \
-	$(DRIVER_OBJECTS)
+	$(BUILD)/process.o
 
-.PHONY: all image run run-debug clean help check drivers
+.PHONY: all image run run-debug clean help check
 
 all: image
 
@@ -50,7 +32,6 @@ help:
 	  '  make              Build a bootable raw disk image' \
 	  '  make run          Boot the image in QEMU' \
 	  '  make run-debug    Boot QEMU with debug output' \
-	  '  make drivers      List built-in driver sources' \
 	  '  make check        Check required host tools' \
 	  '  make clean        Remove generated files'
 
@@ -82,23 +63,9 @@ $(BUILD)/unitl.o: kernel/compat/unitl.c kernel/compat/unitl.h
 	mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -Ikernel -Ikernel/compat -c $< -o $@
 
-$(BUILD)/device_manager.o: kernel/device-manager/device_manager.c kernel/device-manager/device_manager.h kernel/drivers/driver_core.h kernel/drivers/drivers.h
+$(BUILD)/device_manager.o: kernel/device-manager/device_manager.c kernel/device-manager/device_manager.h kernel/drivers/linux-port/alien_driver_api.h
 	mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -Ikernel -Ikernel/device-manager -Ikernel/drivers -c $< -o $@
-
-# Driver sources live in kernel/drivers/[<subdir>/] but must land flat in the
-# build dir as drv_<path-with-underscores>.o, so map each one explicitly.
-# Note: $(patsubst %.c,...) is required here -- `$(1:.c=)` would leave the
-# literal text ".o" in the flattened name (no suffix is stripped).
-define driver_rule
-$(BUILD)/drv_$(subst /,_,$(patsubst kernel/%.c,%,$(1))).o: $(1)
-	mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -Ikernel -Ikernel/drivers -c $$< -o $$@
-endef
-$(foreach src,$(DRIVER_SOURCES),$(eval $(call driver_rule,$(src))))
-
-drivers:
-	@printf '%s\n' $(DRIVER_SOURCES)
+	$(CC) $(CFLAGS) -Ikernel -Ikernel/device-manager -Ikernel/drivers/linux-port -c $< -o $@
 
 $(BUILD)/elf32.o: kernel/elf32.c kernel/elf32.h
 	mkdir -p $(BUILD)
