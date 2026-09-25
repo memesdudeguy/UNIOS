@@ -24,7 +24,8 @@ _start:
     ljmp $0x08, $protected_mode
 
 disk_error:
-    movw $0x0e45, %ax
+    movb $'E', %al
+    movb $0x0e, %ah
     int $0x10
 1:
     cli
@@ -40,7 +41,10 @@ protected_mode:
     movw %ax, %fs
     movw %ax, %gs
     movl $0x90000, %esp
-    call *$0x10000
+
+    # The kernel is loaded at physical address 0x10000.
+    movl $0x10000, %eax
+    call *%eax
 2:
     cli
     hlt
