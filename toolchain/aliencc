@@ -29,12 +29,6 @@ if [ "$has_cpu" -eq 0 ]; then
         i386|i486|pentium)
             args=(-march="$CPU" "${args[@]}")
             ;;
-        x86-64|x86_64|x86-64-v2|x86-64-v3|x86-64-v4)
-            # Modern 64-bit machines: SSE/SSE2 baseline is guaranteed by the
-            # x86-64 ISA itself, so only clamp the legacy FPU flags for the
-            # 32-bit kernel profile.
-            args=(-march="$CPU" "${args[@]}")
-            ;;
         *)
             echo "aliencc: unsupported UNIOS_CPU=$CPU" >&2
             exit 2

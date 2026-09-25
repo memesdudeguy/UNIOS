@@ -1,24 +1,6 @@
-# UNIOS driver manifest — one line per built-in driver.
-# Format: name bus match-key status
-vga         isa      class=display        active-on-probe
-i8042-ps2   isa      port=60/64           active-on-probe
-uart-16550  isa      port=3f8             active-on-probe
-i915        pci      intel hd/uhd/iris    matched (modeset pending fb allocator)
-amdgpu      pci      amd radeon/navi      matched (modeset pending fb allocator)
-nv-open     pci      nvidia geforce/rtx   matched (modeset pending fb allocator)
-r8169       pci      realtek ethernet     matched (packets pending safe dma)
-e1000       pci      intel ethernet       matched (packets pending safe dma)
-ath9k       pci      atheros wifi         matched (radio pending firmware loader)
-iwlwifi     pci      intel wifi 6/6e/7    matched (radio pending firmware loader)
-mt76        pci      mediatek wifi        matched (radio pending firmware loader)
-brcmfmac    pci      broadcom/cypress wifi matched (radio pending firmware loader)
-rtw88       pci      realtek wifi         matched (radio pending firmware loader)
-xhci-hcd    pci      usb 3.x class 0c/03  matched (hub enumeration pending dma)
-ehci-pci    pci      usb 2.0              matched (hub enumeration pending dma)
-ohci        pci      usb 1.1              matched (hub enumeration pending dma)
-uhci        pci      usb 1.1              matched (hub enumeration pending dma)
-ahci        pci      sata class 01/06     matched (queues pending safe dma)
-ata_piix    pci      legacy ide           matched (pio only until dma)
-nvme        pci      nvme class 01/08     matched (queues pending safe dma)
-hda-intel   pci      hd audio class 04/03 matched (mixer pending audio core)
-ac97        pci      legacy ac97          matched (mixer pending audio core)
+vga builtin matched-by-class
+ps2 builtin matched-by-port
+pci disabled-until-enumeration
+usb disabled-until-enumeration
+network disabled-until-safe-pci-dma
+storage disabled-until-safe-pci-dma

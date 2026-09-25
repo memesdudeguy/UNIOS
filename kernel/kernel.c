@@ -1,11 +1,16 @@
 #include <stdint.h>
 
-#include "device-manager/device_manager.h"
-#include "drivers/driver_core.h"
-#include "drivers/pci.h"
-#include "drivers/ioports.h"
-
 #define SERIAL_PORT 0x3f8
+
+static inline void outb(uint16_t port, uint8_t value) {
+    __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
+}
+
+static inline uint8_t inb(uint16_t port) {
+    uint8_t value;
+    __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
+    return value;
+}
 
 static void serial_init(void) {
     outb(SERIAL_PORT + 1, 0x00);
@@ -112,64 +117,8 @@ static void command_kill(const char *arg) {
     if (!arg || !arg[0]) { terminal_write("kill: usage: kill PID\n"); return; }
     terminal_write("kill: process management is not implemented yet\n");
 }
-static const char *driver_class_name(enum unios_driver_class c) {
-    switch (c) {
-        case UNIOS_CLS_DISPLAY: return "display";
-        case UNIOS_CLS_INPUT: return "input";
-        case UNIOS_CLS_STORAGE: return "storage";
-        case UNIOS_CLS_NETWORK: return "ethernet";
-        case UNIOS_CLS_WLAN: return "wifi";
-        case UNIOS_CLS_USB: return "usb";
-        case UNIOS_CLS_AUDIO: return "audio";
-        default: return "misc";
-    }
-}
-
-static const char *driver_status_name(enum unios_driver_status s) {
-    switch (s) {
-        case UNIOS_DRV_ACTIVE: return "active";
-        case UNIOS_DRV_MATCHED: return "matched";
-        default: return "stalled";
-    }
-}
-
-static void print_hex_u16(uint16_t v) {
-    static const char digits[] = "0123456789ABCDEF";
-    char buf[5];
-    for (int i = 3; i >= 0; --i) { buf[i] = digits[v & 0xF]; v >>= 4; }
-    buf[4] = '\0';
-    terminal_write(buf);
-}
-
-static void command_scan(void) {
-    uint32_t n = device_manager_pci_count();
-    terminal_write("PCI devices enumerated:\n");
-    if (n == 0) { terminal_write("  none\n"); }
-    for (uint32_t i = 0; i < n; ++i) {
-        const struct unios_pci_device *d = device_manager_pci_at(i);
-        terminal_write("  ");
-        print_hex_u16(d->vendor_id);
-        terminal_write(":");
-        print_hex_u16(d->device_id);
-        terminal_write(" class ");
-        print_hex_u16((uint16_t)((d->class_code << 8) | d->subclass_code));
-        terminal_write("\n");
-    }
-}
-
-static void command_orbit(void) {
-    terminal_write("Driver registry (Linux-style match tables):\n");
-    for (uint32_t i = 0; i < device_manager_driver_count(); ++i) {
-        const struct unios_driver *drv = device_manager_driver_at(i);
-        terminal_write("  ");
-        terminal_write(drv->name);
-        terminal_write(" [");
-        terminal_write(driver_class_name(drv->drv_class));
-        terminal_write("] ");
-        terminal_write(driver_status_name(drv->status));
-        terminal_write("\n");
-    }
-}
+static void command_scan(void) { terminal_write("Devices found:\n  vga   available\n  ps2   available\n  pci   not enumerated\n"); }
+static void command_orbit(void) { terminal_write("Driver status:\n  vga   active\n  ps2   active\n  pci   disabled\n"); }
 static void command_dock(void) { terminal_write("dock: RAMFS is mounted at /\n"); }
 static void command_undock(void) { terminal_write("undock: no removable device attached\n"); }
 static void command_fuel(void) { terminal_write("fuel: memory statistics unavailable\n"); }
@@ -215,23 +164,7 @@ static void terminal_command(const char *command) {
 
 void kernel_main(void) {
     serial_init();
-    device_manager_init();
     terminal_write("UNIOS booted. Type 'help' for commands.\n");
-    {
-        uint32_t active = 0, matched = 0;
-        for (uint32_t i = 0; i < device_manager_driver_count(); ++i) {
-            enum unios_driver_status st = device_manager_driver_at(i)->status;
-            if (st == UNIOS_DRV_ACTIVE) active++;
-            else if (st == UNIOS_DRV_MATCHED) matched++;
-        }
-        terminal_write("hardware: ");
-        print_hex_u16((uint16_t)device_manager_pci_count());
-        terminal_write(" PCI functions, drivers active: ");
-        print_hex_u16((uint16_t)active);
-        terminal_write(", matched: ");
-        print_hex_u16((uint16_t)matched);
-        terminal_write(" (type 'drivers' for the list)\n");
-    }
     for (;;) {
         char input[128];
         int i = 0;

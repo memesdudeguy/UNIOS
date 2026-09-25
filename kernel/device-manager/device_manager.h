@@ -2,18 +2,23 @@
 #define UNIOS_DEVICE_MANAGER_H
 
 #include <stdint.h>
-#include "../drivers/driver_core.h"
 
-/*
- * The device manager now wraps the driver registry + PCI enumeration table
- * instead of keeping its own duplicate match list. Older hand-rolled
- * register/match API removed as not needed.
- */
+enum unios_driver_state {
+    UNIOS_DRIVER_DISABLED = 0,
+    UNIOS_DRIVER_MATCHED = 1,
+    UNIOS_DRIVER_ACTIVE = 2
+};
+
+struct unios_device_match {
+    uint16_t vendor_id;
+    uint16_t device_id;
+    uint8_t class_code;
+    uint8_t subclass_code;
+    enum unios_driver_state state;
+};
 
 int device_manager_init(void);
-uint32_t device_manager_pci_count(void);
-const struct unios_pci_device *device_manager_pci_at(uint32_t index);
-uint32_t device_manager_driver_count(void);
-const struct unios_driver *device_manager_driver_at(uint32_t index);
+int device_manager_register_match(const struct unios_device_match *match);
+int device_manager_match_device(uint16_t vendor_id, uint16_t device_id, uint8_t class_code, uint8_t subclass_code);
 
 #endif
